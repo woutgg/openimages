@@ -591,14 +591,9 @@ def _build_annotations(
             "include_segmentation_masks": include_segmentation_masks,
         }
 
-        if annotation_format == "pascal":
-            build_args["class_label"] = class_labels[class_index]
-        elif annotation_format == "darknet":
-            build_args["class_index"] = class_index
-        else:
-            raise ValueError(
-                f"Unsupported annotation format: \"{annotation_format}\"",
-            )
+        build_args["class_label_name"] = class_labels[class_index]
+        build_args["class_label_index"] = class_index
+
         build_args_list.append(build_args)
 
     # use a ProcessPoolExecutor to download the images in parallel
@@ -629,7 +624,7 @@ def _build_annotation(arguments: Dict):
         # using all bounding boxes in the image's group
         _write_bboxes_as_pascal(
             arguments["bboxes"],
-            arguments["class_label"],
+            arguments["class_label_name"],
             arguments["image_id"],
             arguments["images_dir"],
             arguments["annotations_dir"],
@@ -642,7 +637,7 @@ def _build_annotation(arguments: Dict):
         # using all bounding boxes in the image's group
         _write_bboxes_as_darknet(
             arguments["bboxes"],
-            arguments["class_index"],
+            arguments["class_label_index"],
             arguments["image_id"],
             arguments["images_dir"],
             arguments["annotations_dir"],
@@ -790,7 +785,7 @@ def _group_segments(
         label_codes: Dict,
         label_image_ids: Dict,
         meta_dir: str = None,
-) -> pd.core.groupby.DataFrameGroupBy:
+) -> Dict[str, pd.core.groupby.DataFrameGroupBy]:
     """
     Gets a pandas DataFrameGroupBy object containing segmentations for an image
     class grouped by image ID.
