@@ -390,10 +390,12 @@ def download_segmentation_dataset(
 
             # build the annotations
             if annotation_format is not None:
+                num_masks = sum([len(g[1]) for g in segmentation_groups])
                 _logger.info(
-                    f"Creating {len(image_ids)} {split_section} annotations "
-                    f"({annotation_format}) for class \'{class_label}\'",
+                    f"Creating {num_masks} {split_section} '{annotation_format}' "
+                    f"annotations ({len(image_ids)} images) for class \'{class_label}\'",
                 )
+
                 _build_annotations(
                     annotation_format,
                     image_ids,
