@@ -26,6 +26,8 @@ __all__ = ["download_dataset", "download_images"]
 _OID_v4 = "https://storage.googleapis.com/openimages/2018_04/"
 _OID_v5 = "https://storage.googleapis.com/openimages/v5/"
 
+OID_ANNOTATION_FILENAME = "oid-segmentations.csv"
+
 # ignore the connection pool is full warning messages from boto
 warnings.filterwarnings("ignore")
 
@@ -329,6 +331,11 @@ def download_segmentation_dataset(
             os.makedirs(annotations_dir, exist_ok=True)
             class_directories[class_label]["annotations_dir"] = annotations_dir
 
+        # If we are going to write OID annotations files, clear any existing ones.
+        if annotation_format == "oid":
+            _clear_oid_annotations(annotations_dir)
+
+
     # get the IDs of questionable files marked for exclusion
     exclusion_ids = None
     if exclusions_path is not None:
@@ -396,6 +403,13 @@ def download_segmentation_dataset(
                     f"annotations ({len(image_ids)} images) for class \'{class_label}\'",
                 )
 
+            if annotation_format == "oid":
+                _append_oid_annotations(
+                    segmentation_groups,
+                    class_directories[class_label]["annotations_dir"],
+                )
+
+            else:
                 _build_annotations(
                     annotation_format,
                     image_ids,
@@ -547,6 +561,43 @@ def _download_segmentations_by_image_id(
                   total=len(download_args_list), desc="Extracting mask images"))
 
     close_segmentation_zipfiles(handle_map)
+
+
+# ------------------------------------------------------------------------------
+def _clear_oid_annotations(annotations_dir: str):
+    """
+    Clears OID annotation files, call this before calling _append_oid_annotations.
+
+    :param annotations_dir: path where oid annotations are stored
+    """
+    annot_file_path = os.path.join(annotations_dir, OID_ANNOTATION_FILENAME)
+
+    if os.path.isfile(annot_file_path):
+        os.unlink(annot_file_path)
+
+
+# ------------------------------------------------------------------------------
+def _append_oid_annotations(
+    oid_segmentation_groups: pd.core.groupby.DataFrameGroupBy,
+    annotations_dir: str,
+):
+    """
+    Appends OID annotation rows for the given grouped dataframe to the
+    annotations file at the given location.
+
+    This results in a single file in the Open images format (see
+    https://storage.googleapis.com/openimages/web/download_v5.html#vrd).
+
+    :param oid_segmentation_groups: grouped segmentation rows to write
+    :param annotations_dir: path where oid annotations are stored
+    """
+    annot_file_path = os.path.join(annotations_dir, OID_ANNOTATION_FILENAME)
+
+    first_row = not os.path.isfile(annot_file_path)
+
+    for group in oid_segmentation_groups:
+        group[1].to_csv(annot_file_path, mode="a", header=first_row, index=False)
+        first_row = False
 
 
 # ------------------------------------------------------------------------------
@@ -842,8 +893,9 @@ def _group_segments(
         image_ids = label_image_ids[class_label]
         df_label_images = df_label_images[df_label_images["ImageID"].isin(image_ids)]
 
-        # drop the label name column since it's no longer needed
-        df_label_images.drop(["LabelName"], axis=1, inplace=True)
+        # Note: labels are not removed as they may be required for oid annotation output.
+        # # drop the label name column since it's no longer needed
+        # df_label_images.drop(["LabelName"], axis=1, inplace=True)
 
         # map the class label to a GroupBy object with each
         # group's row containing the bounding box columns
